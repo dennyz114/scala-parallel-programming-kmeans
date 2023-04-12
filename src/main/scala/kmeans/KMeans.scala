@@ -3,9 +3,10 @@ package kmeans
 import scala.annotation.tailrec
 import scala.collection.{Map, Seq, mutable}
 import scala.collection.parallel.CollectionConverters.*
-import scala.collection.parallel.{ForkJoinTaskSupport, ParMap, ParSeq}
+import scala.collection.parallel.{ForkJoinTaskSupport, ParMap, ParSeq, immutable}
 import scala.util.Random
 import org.scalameter.*
+
 import java.util.concurrent.ForkJoinPool
 
 class KMeans extends KMeansInterface:
@@ -40,7 +41,9 @@ class KMeans extends KMeansInterface:
     closest
 
   def classify(points: ParSeq[Point], means: ParSeq[Point]): ParMap[Point, ParSeq[Point]] =
-    ???
+    val meanToPoint = points.map(point => (findClosest(point, means), point))
+    val groups = meanToPoint.groupBy(_._1).map((mean, points) => (mean, points.map(_._2)))
+    means.map(mean => mean -> groups.getOrElse(mean, ParSeq.empty)).toMap
 
   def findAverage(oldMean: Point, points: ParSeq[Point]): Point = if points.isEmpty then oldMean else
     var x = 0.0
@@ -54,14 +57,16 @@ class KMeans extends KMeansInterface:
     Point(x / points.length, y / points.length, z / points.length)
 
   def update(classified: ParMap[Point, ParSeq[Point]], oldMeans: ParSeq[Point]): ParSeq[Point] =
-    ???
+    oldMeans.map(mean => findAverage(mean, classified(mean)))
 
   def converged(eta: Double, oldMeans: ParSeq[Point], newMeans: ParSeq[Point]): Boolean =
-    ???
+    (oldMeans zip newMeans).forall((oldMean, newMean) => oldMean.squareDistance(newMean) < eta)
 
   @tailrec
   final def kMeans(points: ParSeq[Point], means: ParSeq[Point], eta: Double): ParSeq[Point] =
-    if (???) kMeans(???, ???, ???) else ??? // your implementation need to be tail recursive
+    val classifiedPoints = classify(points, means)
+    val newMeans = update(classifiedPoints, means)
+    if (!converged(eta, means, newMeans)) kMeans(points, newMeans, eta) else means
 
 /** Describes one point in three-dimensional space.
  *
